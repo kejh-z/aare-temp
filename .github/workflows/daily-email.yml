@@ -9,8 +9,62 @@ jobs:
   send-email:
     runs-on: ubuntu-latest
     steps:
-      - run: git clone https://github.com/kejh-z/aare-temp.git .
-
-      - run: node --version && npm install && node index.js
+      - name: Fetch Aare data and send email
         env:
           RESEND_API_KEY: ${{ secrets.AARE_TEMP }}
+        run: |
+          node -e '
+          const API_URL = "https://aareguru.existenz.ch/v2018/current?app=aare-temp&version=1.0.0";
+          const RECIPIENTS = ["kevin@holden.ch", "jessica@holden.ch", "brigitte.lendl@bluewin.ch"];
+
+          async function main() {
+            const res = await fetch(API_URL);
+            const data = await res.json();
+
+            const now = new Date();
+            const zurich = new Date(now.toLocaleString("en-US", { timeZone: "Europe/Zurich" }));
+            const startOfDay = new Date(zurich.getFullYear(), zurich.getMonth(), zurich.getDate());
+            const startTs = Math.floor(startOfDay.getTime() / 1000);
+
+            const todayReadings = data.aarepast.filter(r => r.timestamp >= startTs && r.temperature !== null);
+
+            let maxTemp, maxTime;
+            if (todayReadings.length === 0) {
+              maxTemp = data.aare.temperature;
+              maxTime = data.aare.timestring;
+            } else {
+              let maxReading = todayReadings[0];
+              for (const r of todayReadings) {
+                if (r.temperature > maxReading.temperature) maxReading = r;
+              }
+              maxTemp = maxReading.temperature;
+              const mt = new Date(maxReading.timestamp * 1000);
+              maxTime = mt.toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Zurich" });
+            }
+
+            const currentTemp = data.aare.temperature;
+            const flow = data.aare.flow;
+
+            const today = now.toLocaleDateString("de-CH", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: "Europe/Zurich" });
+            let swimVerdict;
+            if (maxTemp >= 20) swimVerdict = "Perfect for swimming!";
+            else if (maxTemp >= 18) swimVerdict = "Warm enough for a swim.";
+            else if (maxTemp >= 16) swimVerdict = "A bit fresh, but doable.";
+            else swimVerdict = "Too cold for most swimmers.";
+
+            const subject = "Aare: " + maxTemp.toFixed(1) + "°C peak today";
+            const html = "<div style=\"font-family:system-ui,sans-serif;max-width:480px;margin:0 auto\"><h2 style=\"color:#1a5276;margin-bottom:4px\">Aare Marzili — Daily Report</h2><p style=\"color:#666;margin-top:0\">" + today + "</p><div style=\"background:linear-gradient(135deg,#1a5276,#2e86c1);color:white;border-radius:12px;padding:24px;text-align:center;margin:16px 0\"><div style=\"font-size:48px;font-weight:bold\">" + maxTemp.toFixed(1) + "°C</div><div style=\"font-size:14px;opacity:0.9\">Peak temperature at " + maxTime + "</div></div><table style=\"width:100%;border-collapse:collapse;margin:16px 0\"><tr><td style=\"padding:8px 0;border-bottom:1px solid #eee\">Current temperature</td><td style=\"padding:8px 0;border-bottom:1px solid #eee;text-align:right;font-weight:bold\">" + currentTemp.toFixed(1) + "°C</td></tr><tr><td style=\"padding:8px 0;border-bottom:1px solid #eee\">Flow rate</td><td style=\"padding:8px 0;border-bottom:1px solid #eee;text-align:right;font-weight:bold\">" + flow + " m³/s</td></tr><tr><td style=\"padding:8px 0\">Measurements today</td><td style=\"padding:8px 0;text-align:right;font-weight:bold\">" + todayReadings.length + "</td></tr></table><p style=\"font-size:16px\">" + swimVerdict + "</p><p style=\"color:#999;font-size:12px;margin-top:24px\">Data from <a href=\"https://aaremarzili.ch\" style=\"color:#999\">aaremarzili.ch</a> via aare.guru API</p></div>";
+
+            console.log("Max: " + maxTemp.toFixed(1) + "C at " + maxTime);
+
+            const emailRes = await fetch("https://api.resend.com/emails", {
+              method: "POST",
+              headers: { "Authorization": "Bearer " + process.env.RESEND_API_KEY, "Content-Type": "application/json" },
+              body: JSON.stringify({ from: "Aare Temp <aare@holden.ch>", to: RECIPIENTS, subject, html })
+            });
+            const result = await emailRes.json();
+            if (!emailRes.ok) { console.error("Failed:", JSON.stringify(result)); process.exit(1); }
+            console.log("Email sent! ID: " + result.id);
+          }
+          main().catch(e => { console.error(e); process.exit(1); });
+          '
