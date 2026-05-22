@@ -1,0 +1,13 @@
+{
+  "name": "aare-temp",
+  "version": "1.0.0",
+  "description": "Daily Aare river max temperature email",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "node index.js --dry-run"
+  },
+  "dependencies": {
+    "resend": "^4.0.0"
+  }
+}
