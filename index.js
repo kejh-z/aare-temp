@@ -4,7 +4,7 @@ const path = require("path");
 
 const API_URL =
   "https://aareguru.existenz.ch/v2018/current?app=aare-temp&version=1.0.0";
-const RECIPIENT = "kevin@holden.ch";
+const RECIPIENT = "kevin.holden@zuhlke.com";
 
 function loadEnv() {
   const envPath = path.join(__dirname, ".env");
