@@ -4,7 +4,7 @@ const path = require("path");
 
 const API_URL =
   "https://aareguru.existenz.ch/v2018/current?app=aare-temp&version=1.0.0";
-const RECIPIENT = "kevin@holden.ch";
+const RECIPIENTS = ["kevin@holden.ch", "jessica@holden.ch"];
 
 function loadEnv() {
   const envPath = path.join(__dirname, ".env");
@@ -125,7 +125,7 @@ async function main() {
 
   if (dryRun) {
     console.log("\n--- DRY RUN ---");
-    console.log(`To: ${RECIPIENT}`);
+    console.log(`To: ${RECIPIENTS}`);
     console.log(`Subject: ${subject}`);
     console.log("Email would be sent. Use 'npm start' to send for real.");
     return;
@@ -133,10 +133,10 @@ async function main() {
 
   const resend = new Resend(process.env.RESEND_API_KEY);
 
-  console.log(`Sending email to ${RECIPIENT}...`);
+  console.log(`Sending email to ${RECIPIENTS}...`);
   const { data: result, error } = await resend.emails.send({
     from: "Aare Temp <aare@holden.ch>",
-    to: [RECIPIENT],
+    to: RECIPIENTS,
     subject,
     html,
   });
