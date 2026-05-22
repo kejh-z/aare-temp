@@ -1,0 +1,22 @@
+name: Daily Aare Temperature Email
+
+on:
+  schedule:
+    - cron: "0 16 * * *" # 16:00 UTC = 18:00 CEST (summer) / 17:00 CET (winter)
+  workflow_dispatch: # allows manual trigger from GitHub UI
+
+jobs:
+  send-email:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm install
+
+      - run: node index.js
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}

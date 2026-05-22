@@ -8,14 +8,18 @@ const RECIPIENTS = ["kevin@holden.ch", "jessica@holden.ch", "brigitte.lendl@blue
 
 function loadEnv() {
   const envPath = path.join(__dirname, ".env");
-  if (!fs.existsSync(envPath)) {
-    console.error("Missing .env file. Copy .env.example to .env and add your Resend API key.");
-    process.exit(1);
+  if (fs.existsSync(envPath)) {
+    const lines = fs.readFileSync(envPath, "utf-8").split("\n");
+    for (const line of lines) {
+      const match = line.match(/^([^=]+)=(.*)$/);
+      if (match && !process.env[match[1].trim()]) {
+        process.env[match[1].trim()] = match[2].trim();
+      }
+    }
   }
-  const lines = fs.readFileSync(envPath, "utf-8").split("\n");
-  for (const line of lines) {
-    const match = line.match(/^([^=]+)=(.*)$/);
-    if (match) process.env[match[1].trim()] = match[2].trim();
+  if (!process.env.RESEND_API_KEY) {
+    console.error("Missing RESEND_API_KEY. Set it in .env or as an environment variable.");
+    process.exit(1);
   }
 }
 
