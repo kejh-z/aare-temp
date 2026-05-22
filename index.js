@@ -4,7 +4,7 @@ const path = require("path");
 
 const API_URL =
   "https://aareguru.existenz.ch/v2018/current?app=aare-temp&version=1.0.0";
-const RECIPIENT = "kevin.holden@zuhlke.com";
+const RECIPIENT = "kevin@holden.ch";
 
 function loadEnv() {
   const envPath = path.join(__dirname, ".env");
@@ -135,7 +135,7 @@ async function main() {
 
   console.log(`Sending email to ${RECIPIENT}...`);
   const { data: result, error } = await resend.emails.send({
-    from: "Aare Temp <onboarding@resend.dev>",
+    from: "Aare Temp <aare@holden.ch>",
     to: [RECIPIENT],
     subject,
     html,
