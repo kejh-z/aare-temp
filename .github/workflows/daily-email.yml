@@ -1,9 +1,7 @@
 name: Daily Aare Temperature Email
 
 on:
-  schedule:
-    - cron: "0 16 * * *" # 16:00 UTC = 18:00 CEST (summer) / 17:00 CET (winter)
-  workflow_dispatch: # allows manual trigger from GitHub UI
+  workflow_dispatch: # triggered by cron-job.org at 18:00 Zurich time
 
 jobs:
   send-email:
