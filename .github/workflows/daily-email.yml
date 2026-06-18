@@ -39,7 +39,7 @@ jobs:
             throw new Error("Aare API unavailable after " + MAX_ATTEMPTS + " attempts: " + lastErr.message);
           }
 
-          async function main() {
+          async function sendReport() {
             const data = await fetchAareData();
 
             const now = new Date();
@@ -84,8 +84,21 @@ jobs:
               body: JSON.stringify({ from: "Aare Temp <aare@holden.ch>", to: RECIPIENTS, subject, html })
             });
             const result = await emailRes.json();
-            if (!emailRes.ok) { console.error("Failed:", JSON.stringify(result)); process.exit(1); }
+            if (!emailRes.ok) throw new Error("Resend send failed: " + JSON.stringify(result));
             console.log("Email sent! ID: " + result.id);
+          }
+
+          async function main() {
+            const OFFSETS_MIN = [0, 15, 30, 60];
+            let prev = 0, lastErr;
+            for (let i = 0; i < OFFSETS_MIN.length; i++) {
+              const wait = OFFSETS_MIN[i] - prev; prev = OFFSETS_MIN[i];
+              if (wait > 0) { console.log("Run " + (i + 1) + "/" + OFFSETS_MIN.length + ": waiting " + wait + " min before retry..."); await sleep(wait * 60000); }
+              try { await sendReport(); console.log("Succeeded on run " + (i + 1) + "/" + OFFSETS_MIN.length); return; }
+              catch (e) { lastErr = e; console.error("Run " + (i + 1) + "/" + OFFSETS_MIN.length + " failed: " + e.message); }
+            }
+            console.error("All scheduled runs failed. Last error: " + lastErr.message);
+            process.exit(1);
           }
           main().catch(e => { console.error(e); process.exit(1); });
           '

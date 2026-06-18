@@ -134,11 +134,7 @@ function buildEmail(maxTemp, maxTime, currentTemp, flow, readings) {
   return { subject, html };
 }
 
-async function main() {
-  const dryRun = process.argv.includes("--dry-run");
-
-  loadEnv();
-
+async function sendReport(dryRun) {
   console.log("Fetching Aare data...");
   const data = await fetchAareData();
 
@@ -169,12 +165,45 @@ async function main() {
     html,
   });
 
-  if (error) {
-    console.error("Failed to send email:", error);
-    process.exit(1);
-  }
+  if (error) throw new Error(`Resend send failed: ${JSON.stringify(error)}`);
 
   console.log(`Email sent! ID: ${result.id}`);
+}
+
+// Spaced retry schedule: minutes after the first attempt. On failure the whole
+// report is retried at +15, +30, and +60 min, returning as soon as one run
+// succeeds (so no duplicate emails). Skipped for --dry-run.
+const RETRY_OFFSETS_MIN = [0, 15, 30, 60];
+
+async function main() {
+  const dryRun = process.argv.includes("--dry-run");
+  loadEnv();
+
+  if (dryRun) {
+    await sendReport(true);
+    return;
+  }
+
+  let prev = 0;
+  let lastErr;
+  for (let i = 0; i < RETRY_OFFSETS_MIN.length; i++) {
+    const wait = RETRY_OFFSETS_MIN[i] - prev;
+    prev = RETRY_OFFSETS_MIN[i];
+    if (wait > 0) {
+      console.log(`Run ${i + 1}/${RETRY_OFFSETS_MIN.length}: waiting ${wait} min before retry...`);
+      await sleep(wait * 60000);
+    }
+    try {
+      await sendReport(false);
+      console.log(`Succeeded on run ${i + 1}/${RETRY_OFFSETS_MIN.length}`);
+      return;
+    } catch (e) {
+      lastErr = e;
+      console.error(`Run ${i + 1}/${RETRY_OFFSETS_MIN.length} failed: ${e.message}`);
+    }
+  }
+  console.error(`All scheduled runs failed. Last error: ${lastErr.message}`);
+  process.exit(1);
 }
 
 main().catch((err) => {
