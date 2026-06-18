@@ -25,9 +25,11 @@ function loadEnv() {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+const MAX_ATTEMPTS = 8;
+
 async function fetchAareData() {
   let lastErr;
-  for (let attempt = 1; attempt <= 4; attempt++) {
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
       const res = await fetch(API_URL, { headers: { Accept: "application/json" } });
       const text = await res.text();
@@ -36,19 +38,19 @@ async function fetchAareData() {
       try {
         parsed = JSON.parse(text);
       } catch (e) {
-        throw new Error(`Non-JSON response (starts with: ${text.slice(0, 60).replace(/\s+/g, " ").trim()})`);
+        throw new Error(`Non-JSON response (starts with: ${text.slice(0, 80).replace(/\s+/g, " ").trim()})`);
       }
       if (!parsed || !parsed.aare || !Array.isArray(parsed.aarepast)) {
-        throw new Error("Unexpected JSON shape");
+        throw new Error(`Unexpected JSON shape (got: ${JSON.stringify(parsed).slice(0, 100)})`);
       }
       return parsed;
     } catch (e) {
       lastErr = e;
-      console.error(`Attempt ${attempt}/4 failed: ${e.message}`);
-      if (attempt < 4) await sleep(attempt * 3000);
+      console.error(`Attempt ${attempt}/${MAX_ATTEMPTS} failed: ${e.message}`);
+      if (attempt < MAX_ATTEMPTS) await sleep(Math.min(attempt * 5000, 30000));
     }
   }
-  throw new Error(`Aare API unavailable after 4 attempts: ${lastErr.message}`);
+  throw new Error(`Aare API unavailable after ${MAX_ATTEMPTS} attempts: ${lastErr.message}`);
 }
 
 function findTodayMax(data) {
