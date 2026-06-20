@@ -7,6 +7,10 @@ on:
         description: "Internal retry counter (do not set manually)"
         required: false
         default: "1"
+      force_fail:
+        description: "TEST ONLY: force the run to fail to exercise the retry chain"
+        required: false
+        default: "false"
 
 jobs:
   send-email:
@@ -17,6 +21,7 @@ jobs:
         env:
           RESEND_API_KEY: ${{ secrets.AARE_TEMP }}
           ATTEMPT: ${{ github.event.inputs.attempt }}
+          FORCE_FAIL: ${{ github.event.inputs.force_fail }}
         run: |
           node -e '
           const API_URL = "https://aareguru.existenz.ch/v2018/current?app=aare-temp&version=1.0.0";
@@ -99,6 +104,7 @@ jobs:
           }
 
           console.log("Run attempt #" + (process.env.ATTEMPT || "1"));
+          if (process.env.FORCE_FAIL === "true") { console.error("Forced failure (controlled retry test) - no email sent"); process.exit(1); }
           sendReport().catch(e => { console.error(e); process.exit(1); });
           '
 
@@ -107,6 +113,7 @@ jobs:
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
           ATTEMPT: ${{ github.event.inputs.attempt }}
+          FORCE_FAIL: ${{ github.event.inputs.force_fail }}
         run: |
           MAX=6
           CUR=${ATTEMPT:-1}
@@ -128,5 +135,5 @@ jobs:
             -H "Authorization: Bearer $GH_PAT" \
             -H "Accept: application/vnd.github+json" \
             https://api.github.com/repos/kejh-z/aare-temp/actions/workflows/daily-email.yml/dispatches \
-            -d "{\"ref\":\"main\",\"inputs\":{\"attempt\":\"$NEXT\"}}"
+            -d "{\"ref\":\"main\",\"inputs\":{\"attempt\":\"$NEXT\",\"force_fail\":\"${FORCE_FAIL:-false}\"}}"
           echo "Dispatched fresh run #$NEXT."
