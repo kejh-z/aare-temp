@@ -2,14 +2,21 @@ name: Daily Aare Temperature Email
 
 on:
   workflow_dispatch: # triggered by cron-job.org at 18:00 Zurich time
+    inputs:
+      attempt:
+        description: "Internal retry counter (do not set manually)"
+        required: false
+        default: "1"
 
 jobs:
   send-email:
     runs-on: ubuntu-latest
     steps:
       - name: Fetch Aare data and send email
+        id: send
         env:
           RESEND_API_KEY: ${{ secrets.AARE_TEMP }}
+          ATTEMPT: ${{ github.event.inputs.attempt }}
         run: |
           node -e '
           const API_URL = "https://aareguru.existenz.ch/v2018/current?app=aare-temp&version=1.0.0";
@@ -17,7 +24,10 @@ jobs:
 
           const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-          const MAX_ATTEMPTS = 8;
+          // A few quick retries handle genuine transient blips. A blocked IP,
+          // however, blocks every attempt in this run (same IP), so we fail
+          // fast and let the failure step dispatch a fresh run on a new IP.
+          const MAX_ATTEMPTS = 3;
 
           async function fetchAareData() {
             let lastErr;
@@ -32,8 +42,8 @@ jobs:
                 return parsed;
               } catch (e) {
                 lastErr = e;
-                console.error("Attempt " + attempt + "/" + MAX_ATTEMPTS + " failed: " + e.message);
-                if (attempt < MAX_ATTEMPTS) await sleep(Math.min(attempt * 5000, 30000));
+                console.error("Fetch attempt " + attempt + "/" + MAX_ATTEMPTS + " failed: " + e.message);
+                if (attempt < MAX_ATTEMPTS) await sleep(attempt * 3000);
               }
             }
             throw new Error("Aare API unavailable after " + MAX_ATTEMPTS + " attempts: " + lastErr.message);
@@ -88,17 +98,35 @@ jobs:
             console.log("Email sent! ID: " + result.id);
           }
 
-          async function main() {
-            const OFFSETS_MIN = [0, 15, 30, 60];
-            let prev = 0, lastErr;
-            for (let i = 0; i < OFFSETS_MIN.length; i++) {
-              const wait = OFFSETS_MIN[i] - prev; prev = OFFSETS_MIN[i];
-              if (wait > 0) { console.log("Run " + (i + 1) + "/" + OFFSETS_MIN.length + ": waiting " + wait + " min before retry..."); await sleep(wait * 60000); }
-              try { await sendReport(); console.log("Succeeded on run " + (i + 1) + "/" + OFFSETS_MIN.length); return; }
-              catch (e) { lastErr = e; console.error("Run " + (i + 1) + "/" + OFFSETS_MIN.length + " failed: " + e.message); }
-            }
-            console.error("All scheduled runs failed. Last error: " + lastErr.message);
-            process.exit(1);
-          }
-          main().catch(e => { console.error(e); process.exit(1); });
+          console.log("Run attempt #" + (process.env.ATTEMPT || "1"));
+          sendReport().catch(e => { console.error(e); process.exit(1); });
           '
+
+      - name: Re-dispatch a fresh run on failure
+        if: failure()
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+          ATTEMPT: ${{ github.event.inputs.attempt }}
+        run: |
+          MAX=6
+          CUR=${ATTEMPT:-1}
+          if [ "$CUR" -ge "$MAX" ]; then
+            echo "Reached max ($MAX) attempts for today; giving up. The data provider"
+            echo "was likely blocking every IP we landed on. No email sent today."
+            exit 0
+          fi
+          if [ -z "$GH_PAT" ]; then
+            echo "No GH_PAT secret set, cannot dispatch a fresh run. Add a GitHub token"
+            echo "as the GH_PAT repository secret to enable automatic IP-rotation retries."
+            exit 0
+          fi
+          NEXT=$((CUR + 1))
+          echo "Attempt $CUR failed (most likely a blocked datacenter IP)."
+          echo "Waiting 90s, then dispatching a fresh run (#$NEXT) on a new runner/IP..."
+          sleep 90
+          curl -sS -X POST \
+            -H "Authorization: Bearer $GH_PAT" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/kejh-z/aare-temp/actions/workflows/daily-email.yml/dispatches \
+            -d "{\"ref\":\"main\",\"inputs\":{\"attempt\":\"$NEXT\"}}"
+          echo "Dispatched fresh run #$NEXT."
