@@ -239,8 +239,40 @@ def build():
         "<b>Resend</b> handles deliverability and lets us send from a custom domain.",
     ]))
 
-    # 4. Repository contents
-    S.append(Paragraph("4. Repository Contents", h1)); S.append(hr())
+    # 4. Reliability
+    S.append(Paragraph("4. Reliability: IP Blocking &amp; Self-Healing Retry", h1)); S.append(hr())
+    S.append(Paragraph(
+        "The aare.guru server (existenz.ch) runs <b>Imunify360 bot-protection</b>, "
+        "which blocks a large share of cloud / datacenter IP addresses with the "
+        "response <font face='Courier'>{\"message\":\"Access denied by Imunify360 "
+        "bot-protection...\"}</font>. GitHub Actions runners use such IPs, and each "
+        "run gets <b>one IP for its whole lifetime</b>. In practice roughly 40% of "
+        "runs land on a blocked IP &mdash; the cause of the intermittent failures.", body))
+    S.append(Paragraph(
+        "Because every request inside a run shares that one IP, retrying <i>within</i> "
+        "a run (or sleeping and retrying) cannot escape a block. The fix is to retry "
+        "as <b>separate runs</b>, each getting a fresh runner and therefore a fresh IP:", body))
+    S.append(bullets([
+        "A run fetches the data (3 quick attempts, ~10 s, to absorb genuine transient "
+        "blips) and sends the email. On success it finishes.",
+        "On failure, a second step (<font face='Courier'>if: failure()</font>) waits "
+        "90 s and uses the <font face='Courier'>GH_PAT</font> secret to dispatch a "
+        "brand-new run with an incremented <font face='Courier'>attempt</font> counter.",
+        "This repeats until a run succeeds or the cap of <b>6 attempts</b> is reached. "
+        "The chain stops the instant one run succeeds, so recipients never get a duplicate.",
+    ]))
+    S.append(Paragraph(
+        "With ~60% success per IP, six independent attempts give roughly <b>99.6%</b> "
+        "reliability, and on a bad-IP day the email still typically arrives within a "
+        "few minutes. GitHub's built-in token deliberately cannot trigger a "
+        "<font face='Courier'>workflow_dispatch</font> (anti-recursion), which is why a "
+        "separate <font face='Courier'>GH_PAT</font> token secret is required. A browser "
+        "User-Agent is also sent, though the dominant factor is the IP, not the user-agent. "
+        "Local runs via <font face='Courier'>index.js</font> use a residential IP that is "
+        "not blocked, so they need no retry logic.", body))
+
+    # 5. Repository contents
+    S.append(Paragraph("5. Repository Contents", h1)); S.append(hr())
     S.append(make_table([
         ["File", "Purpose"],
         ["<font face='Courier'>.github/workflows/<br/>daily-email.yml</font>",
@@ -272,8 +304,8 @@ def build():
         "equivalent &mdash; if you change recipients or design, update <b>both</b> "
         "(the workflow is what runs in production).", body))
 
-    # 5. Making changes
-    S.append(Paragraph("5. Key Processes &amp; Making Changes", h1)); S.append(hr())
+    # 6. Making changes
+    S.append(Paragraph("6. Key Processes &amp; Making Changes", h1)); S.append(hr())
     S.append(Paragraph("Change recipients", h2))
     S.append(Paragraph("Edit the <font face='Courier'>RECIPIENTS</font> array in "
                        "<b>both</b> the workflow and index.js, then commit and push.", body))
@@ -292,8 +324,8 @@ def build():
                        "<font face='Courier'>AARE_TEMP</font> secret at "
                        "github.com/kejh-z/aare-temp/settings/secrets/actions.", body))
 
-    # 6. Git usage
-    S.append(Paragraph("6. Git Usage", h1)); S.append(hr())
+    # 7. Git usage
+    S.append(Paragraph("7. Git Usage", h1)); S.append(hr())
     S.append(bullets([
         "Git was initialised locally and pushed to GitHub (github.com/kejh-z/aare-temp).",
         "Default branch renamed from <font face='Courier'>master</font> to "
@@ -305,18 +337,31 @@ def build():
         "production key lives only as a GitHub Actions secret.",
     ]))
 
-    # 7. Accounts
-    S.append(Paragraph("7. Accounts &amp; Credentials", h1)); S.append(hr())
+    # 8. Accounts
+    S.append(Paragraph("8. Accounts &amp; Credentials", h1)); S.append(hr())
     S.append(make_table([
         ["Service", "Purpose", "Notes"],
         ["GitHub (kejh-z)", "Hosts the repo and runs the workflow", "Repo: aare-temp"],
         ["Resend", "Sends the emails", "holden.ch verified; key stored as the AARE_TEMP secret"],
         ["cron-job.org", "Triggers the workflow at 18:00", "Uses a GitHub personal access token (classic, repo scope)"],
     ], [30 * mm, 50 * mm, doc.width - 80 * mm]))
+    S.append(Spacer(1, 5))
+    S.append(Paragraph("GitHub repository secrets:", h2))
+    S.append(make_table([
+        ["Secret", "Purpose"],
+        ["AARE_TEMP", "The Resend API key, used to send the email."],
+        ["GH_PAT", "A GitHub token (classic, repo scope) used to re-dispatch a fresh run on failure. Can be the same token value cron-job.org uses."],
+    ], [34 * mm, doc.width - 34 * mm]))
 
-    # 8. Gotchas
-    S.append(Paragraph("8. Known Considerations &amp; Gotchas", h1)); S.append(hr())
+    # 9. Gotchas
+    S.append(Paragraph("9. Known Considerations &amp; Gotchas", h1)); S.append(hr())
     S.append(bullets([
+        "<b>The data provider blocks cloud IPs (Imunify360)</b> &mdash; the single "
+        "biggest source of failures. Handled by the self-healing retry (section 4): "
+        "fresh runs on new IPs. Retrying within one run is useless, since its IP is fixed.",
+        "<b>Re-dispatch needs the GH_PAT secret</b> &mdash; without it the workflow can "
+        "only try once per trigger (the failure step logs that the secret is missing). "
+        "GitHub's built-in token cannot start a new run.",
         "<b>cron-job.org header formatting matters</b> &mdash; the Authorization "
         "value must be exactly <font face='Courier'>Bearer &lt;token&gt;</font>. A "
         "truncated token caused a 401 during setup.",
