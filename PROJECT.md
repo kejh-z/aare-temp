@@ -140,6 +140,11 @@ A browser **User-Agent** header is also sent on the data request (default
 library user-agents are an easy target for bot-protection), though the dominant
 factor is the IP, not the user-agent.
 
+This chain was verified end-to-end on 2026-06-20 using a temporary `force_fail`
+switch (since removed): a forced failure correctly auto-dispatched a fresh run
+on a new IP, and the chain stopped cleanly at the 6-attempt cap with no
+duplicate emails.
+
 > For local runs, `index.js` uses the machine's residential IP, which is **not**
 > blocked, so it needs no retry logic — a single attempt suffices. The
 > IP-rotation retry lives only in the workflow.
@@ -244,6 +249,12 @@ The two GitHub repository secrets:
 - **Re-dispatch needs the `GH_PAT` secret** — without it, the workflow can only
   try once per trigger (the failure step logs that the secret is missing and
   gives up). GitHub's built-in `GITHUB_TOKEN` cannot start a new run.
+- **`GH_PAT` must hold a complete, valid token** — if the stored value is wrong
+  or truncated, the re-dispatch call returns `{"message":"Bad credentials"}`
+  and no retry run is spawned. Note the failed run still prints a "Dispatched
+  fresh run" log line because that message is echoed regardless of the curl
+  result — so check for `Bad credentials` in the failure-step log if retries
+  aren't appearing. (This bit us once; re-entering the exact token fixed it.)
 - **Resend free tier** originally only allowed sending to the account owner's
   own address until the `holden.ch` domain was verified. Now any recipient
   works.

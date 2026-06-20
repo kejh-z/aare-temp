@@ -270,6 +270,11 @@ def build():
         "User-Agent is also sent, though the dominant factor is the IP, not the user-agent. "
         "Local runs via <font face='Courier'>index.js</font> use a residential IP that is "
         "not blocked, so they need no retry logic.", body))
+    S.append(Paragraph(
+        "<b>Verified end-to-end (2026-06-20)</b> with a temporary "
+        "<font face='Courier'>force_fail</font> switch (since removed): a forced failure "
+        "auto-dispatched a fresh run on a new IP, and the chain stopped cleanly at the "
+        "6-attempt cap with no duplicate emails.", body))
 
     # 5. Repository contents
     S.append(Paragraph("5. Repository Contents", h1)); S.append(hr())
@@ -362,6 +367,12 @@ def build():
         "<b>Re-dispatch needs the GH_PAT secret</b> &mdash; without it the workflow can "
         "only try once per trigger (the failure step logs that the secret is missing). "
         "GitHub's built-in token cannot start a new run.",
+        "<b>GH_PAT must hold a complete, valid token</b> &mdash; a wrong or truncated "
+        "value makes the re-dispatch return <font face='Courier'>{\"message\":\"Bad "
+        "credentials\"}</font> and no retry spawns. The failed run still prints a "
+        "\"Dispatched fresh run\" line regardless, so check the failure-step log for "
+        "<font face='Courier'>Bad credentials</font> if retries are missing. (This bit "
+        "us once; re-entering the exact token fixed it.)",
         "<b>cron-job.org header formatting matters</b> &mdash; the Authorization "
         "value must be exactly <font face='Courier'>Bearer &lt;token&gt;</font>. A "
         "truncated token caused a 401 during setup.",
