@@ -255,6 +255,13 @@ The two GitHub repository secrets:
   fresh run" log line because that message is echoed regardless of the curl
   result — so check for `Bad credentials` in the failure-step log if retries
   aren't appearing. (This bit us once; re-entering the exact token fixed it.)
+- **The re-dispatch call is itself a network hop that can glitch** — on
+  2026-07-24 (Friday) the first run hit the usual blocked IP, but the retry's
+  `curl` died with `curl: (92) HTTP/2 stream 1 was not closed cleanly: CANCEL`,
+  so no fresh run was launched and no email went out that day. Fixed by forcing
+  `--http1.1` (avoids that HTTP/2 bug) and adding `--retry 5 --retry-all-errors
+  --retry-delay 5` so a transient blip on the dispatch call can no longer break
+  the chain.
 - **Resend free tier** originally only allowed sending to the account owner's
   own address until the `holden.ch` domain was verified. Now any recipient
   works.

@@ -373,6 +373,13 @@ def build():
         "\"Dispatched fresh run\" line regardless, so check the failure-step log for "
         "<font face='Courier'>Bad credentials</font> if retries are missing. (This bit "
         "us once; re-entering the exact token fixed it.)",
+        "<b>The re-dispatch call is itself a network hop that can glitch</b> &mdash; on "
+        "2026-07-24 the first run hit the usual blocked IP, but the retry's curl died with "
+        "<font face='Courier'>curl: (92) HTTP/2 stream ... CANCEL</font>, so no fresh run "
+        "launched and no email went out that day. Fixed by forcing "
+        "<font face='Courier'>--http1.1</font> and adding "
+        "<font face='Courier'>--retry 5 --retry-all-errors</font> so a transient blip on "
+        "the dispatch call can no longer break the chain.",
         "<b>cron-job.org header formatting matters</b> &mdash; the Authorization "
         "value must be exactly <font face='Courier'>Bearer &lt;token&gt;</font>. A "
         "truncated token caused a 401 during setup.",
