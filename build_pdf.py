@@ -275,6 +275,14 @@ def build():
         "<font face='Courier'>force_fail</font> switch (since removed): a forced failure "
         "auto-dispatched a fresh run on a new IP, and the chain stopped cleanly at the "
         "6-attempt cap with no duplicate emails.", body))
+    S.append(Paragraph(
+        "<b>Alerting behaviour (2026-09-09):</b> a blocked-IP run that successfully "
+        "launches its retry now reports as <b>success</b> (exit 0), so GitHub sends no "
+        "\"workflow failed\" email for a routine blocked IP - the report is still "
+        "delivered by the retry. Previously each such run went red and alerted roughly "
+        "every 2-3 days despite the email always arriving. Only a genuine dead-end (all "
+        "6 attempts used, missing GH_PAT, or the dispatch itself failing) now surfaces "
+        "as a real, alerting failure.", body))
 
     # 5. Repository contents
     S.append(Paragraph("5. Repository Contents", h1)); S.append(hr())

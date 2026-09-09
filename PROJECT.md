@@ -145,6 +145,15 @@ switch (since removed): a forced failure correctly auto-dispatched a fresh run
 on a new IP, and the chain stopped cleanly at the 6-attempt cap with no
 duplicate emails.
 
+**Alerting behaviour (as of 2026-09-09):** a blocked-IP run that successfully
+launches its retry reports as **success** (the job exits 0), so GitHub sends no
+"workflow failed" notification for a routine blocked IP — the report is still
+delivered by the retry, so there is nothing to alert on. Previously each such
+run went red and emailed a failure notice roughly every 2–3 days even though
+the email always arrived. Now only a **genuine dead-end** surfaces as a red /
+alerting failure: all 6 attempts exhausted, the `GH_PAT` secret missing, or the
+re-dispatch call itself failing after its own retries.
+
 > For local runs, `index.js` uses the machine's residential IP, which is **not**
 > blocked, so it needs no retry logic — a single attempt suffices. The
 > IP-rotation retry lives only in the workflow.
