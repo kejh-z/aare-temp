@@ -17,7 +17,9 @@ jobs:
         env:
           RESEND_API_KEY: ${{ secrets.AARE_TEMP }}
           ATTEMPT: ${{ github.event.inputs.attempt }}
+          GH_PAT: ${{ secrets.GH_PAT }}
         run: |
+          set +e
           node -e '
           const API_URL = "https://aareguru.existenz.ch/v2018/current?app=aare-temp&version=1.0.0";
           const RECIPIENTS = ["kevin@holden.ch", "jessica@holden.ch", "brigitte.lendl@bluewin.ch"];
@@ -101,24 +103,28 @@ jobs:
           console.log("Run attempt #" + (process.env.ATTEMPT || "1"));
           sendReport().catch(e => { console.error(e); process.exit(1); });
           '
-
-      - name: Re-dispatch a fresh run on failure
-        if: failure()
-        env:
-          GH_PAT: ${{ secrets.GH_PAT }}
-          ATTEMPT: ${{ github.event.inputs.attempt }}
-        run: |
-          MAX=6
-          CUR=${ATTEMPT:-1}
-          if [ "$CUR" -ge "$MAX" ]; then
-            echo "Reached max ($MAX) attempts for today; giving up. The data provider"
-            echo "was likely blocking every IP we landed on. No email sent today."
+          CODE=$?
+          if [ "$CODE" -eq 0 ]; then
+            echo "Report delivered on attempt ${ATTEMPT:-1}."
             exit 0
           fi
+
+          # The send failed on this run's IP (usually Imunify360 blocking the
+          # datacenter IP). Self-heal by dispatching a fresh run on a new IP.
+          # As long as that fresh run is launched, THIS run is reported as a
+          # success (exit 0), so a routine blocked IP does not trigger a
+          # spurious "workflow failed" alert. Only a genuine dead-end - all
+          # attempts used up, a missing token, or the dispatch itself failing -
+          # exits non-zero and surfaces as a real failure worth alerting on.
+          MAX=6
+          CUR=${ATTEMPT:-1}
           if [ -z "$GH_PAT" ]; then
-            echo "No GH_PAT secret set, cannot dispatch a fresh run. Add a GitHub token"
-            echo "as the GH_PAT repository secret to enable automatic IP-rotation retries."
-            exit 0
+            echo "Send failed and no GH_PAT secret is set - cannot launch a retry."
+            exit 1
+          fi
+          if [ "$CUR" -ge "$MAX" ]; then
+            echo "Send failed and reached the max ($MAX) attempts for today. Giving up (real failure)."
+            exit 1
           fi
           NEXT=$((CUR + 1))
           echo "Attempt $CUR failed (most likely a blocked datacenter IP)."
@@ -127,11 +133,17 @@ jobs:
           # Force HTTP/1.1 (avoids the intermittent "curl (92) HTTP/2 stream ...
           # CANCEL" that once broke the chain) and let curl retry transient
           # network/5xx errors itself, so a single glitch cannot stop the retries.
-          curl -sS --http1.1 --fail-with-body \
-            --retry 5 --retry-all-errors --retry-delay 5 --max-time 30 \
-            -X POST \
-            -H "Authorization: Bearer $GH_PAT" \
-            -H "Accept: application/vnd.github+json" \
-            https://api.github.com/repos/kejh-z/aare-temp/actions/workflows/daily-email.yml/dispatches \
-            -d "{\"ref\":\"main\",\"inputs\":{\"attempt\":\"$NEXT\"}}"
-          echo "Dispatched fresh run #$NEXT."
+          if curl -sS --http1.1 --fail-with-body \
+               --retry 5 --retry-all-errors --retry-delay 5 --max-time 30 \
+               -X POST \
+               -H "Authorization: Bearer $GH_PAT" \
+               -H "Accept: application/vnd.github+json" \
+               https://api.github.com/repos/kejh-z/aare-temp/actions/workflows/daily-email.yml/dispatches \
+               -d "{\"ref\":\"main\",\"inputs\":{\"attempt\":\"$NEXT\"}}"; then
+            echo "Fresh run #$NEXT dispatched - this blocked-IP attempt was handled by the"
+            echo "retry chain, so this run is reported as success (no failure alert)."
+            exit 0
+          else
+            echo "Retry dispatch failed even after curl retries - surfacing as a real failure."
+            exit 1
+          fi
