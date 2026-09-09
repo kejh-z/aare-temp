@@ -277,3 +277,67 @@ The two GitHub repository secrets:
 - If emails land in **spam**, sending separate emails per recipient (instead of
   one with all three in the `to` field) can improve deliverability — not
   currently done, but easy to switch on.
+
+---
+
+## Changelog
+
+Newest first. Each entry records **what** changed and **why**. Please add a new
+entry here whenever the app or its setup changes.
+
+### 2026-09-09 — Stop false "workflow failed" alerts on recovered days
+- **What:** Merged the send and re-dispatch into one workflow step. A blocked-IP
+  run that successfully launches its retry now reports as **success** (exit 0);
+  only a genuine dead-end (all 6 attempts used, missing `GH_PAT`, or the
+  dispatch itself failing) reports as a real failure.
+- **Why:** The report was always being delivered by the retry, but GitHub still
+  emailed a "workflow failed" notice for the red first run — roughly every 2–3
+  days. Those alerts were noise; now only real failures alert.
+
+### 2026-07-27 — Harden the re-dispatch `curl` call
+- **What:** Added `--http1.1` and `--retry 5 --retry-all-errors --retry-delay 5`
+  to the retry's dispatch call.
+- **Why:** On Friday 2026-07-24 the first run hit the usual blocked IP, but the
+  single `curl` that launches the retry died with `curl: (92) HTTP/2 stream ...
+  CANCEL`, so no fresh run started and no email went out that day. The dispatch
+  had no resilience of its own; now a transient HTTP/2 or network blip can't
+  break the chain.
+
+### 2026-06-20 — Beat the datacenter-IP block with self-healing retries
+- **What:** Diagnosed that aare.guru (existenz.ch) blocks ~40% of cloud IPs via
+  Imunify360 bot-protection. Added a browser `User-Agent`, then the key fix: on
+  failure the workflow re-dispatches a **fresh run on a new IP** (via the
+  `GH_PAT` secret), up to 6 attempts, stopping on first success. Verified
+  end-to-end with a temporary `force_fail` switch (since removed). Also fixed a
+  `GH_PAT` "Bad credentials" issue from a mis-stored token value.
+- **Why:** Every attempt in one run shares one IP, so in-run/spaced retries
+  couldn't escape a block; only fresh runs (fresh IPs) can. Six independent
+  attempts give ~99.6% reliability.
+
+### 2026-06-15 to 2026-06-18 — Harden the data fetch
+- **What:** Read the API response as text and validate it is JSON of the
+  expected shape before use; retry a few times with backoff. (The spaced
+  15/30/60-min in-run retry added here was later superseded by the fresh-run
+  approach above.)
+- **Why:** The API occasionally returned an HTML error page or an unexpected
+  JSON shape, which crashed the run with a cryptic error.
+
+### 2026-05-27 — Documentation
+- **What:** Added `PROJECT.md` and a formatted PDF (`build_pdf.py`).
+- **Why:** Capture how the system works, how to change it, and the gotchas.
+
+### 2026-05-24 — Switch scheduling to cron-job.org
+- **What:** Removed GitHub Actions' built-in `schedule:` cron; the daily 18:00
+  trigger now comes from cron-job.org via `workflow_dispatch`.
+- **Why:** GitHub's cron was unreliable on an inactive repo (delayed or skipped),
+  and once fired hours late, producing a duplicate email.
+
+### 2026-05-22 — Initial build and move to the cloud
+- **What:** Created the Node app that reads the daily peak water temperature from
+  the aare.guru API and emails a formatted HTML report. Added the recipients
+  (kevin@holden.ch, jessica@holden.ch, brigitte.lendl@bluewin.ch), switched
+  sending to the verified `holden.ch` domain, and moved execution into a
+  self-contained GitHub Actions workflow (inlined because the org restricts
+  external actions and the private repo can't be cloned without auth).
+- **Why:** Deliver a reliable daily report that runs in the cloud without the
+  user's PC needing to be on.
