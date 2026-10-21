@@ -30,6 +30,13 @@ Each daily report includes:
 The email is sent as styled HTML (a blue temperature card, a stats table, and a
 data-source footer).
 
+**Winter suspension:** if the day's peak water temperature stays below
+**14.5 °C**, no email is sent that day (the run still succeeds — no retry, no
+alert). Emails resume automatically once the peak rises back above 14.5 °C in
+spring. The email footer states this so recipients know why the reports pause.
+The threshold is the `SUSPEND_BELOW` constant in both the workflow and
+`index.js`.
+
 **Recipients:**
 - kevin@holden.ch
 - jessica@holden.ch
@@ -284,6 +291,17 @@ The two GitHub repository secrets:
 
 Newest first. Each entry records **what** changed and **why**. Please add a new
 entry here whenever the app or its setup changes.
+
+### 2026-10-21 — Winter suspension below 14.5 °C
+- **What:** Added a `SUSPEND_BELOW = 14.5` threshold. If the day's peak water
+  temperature stays below 14.5 °C, no email is sent (the run still exits 0 —
+  green, no retry, no alert). Emails resume automatically once the peak rises
+  back above 14.5 °C. Added a footer note to the email itself: "During the
+  Winter period when temperatures are below 14.5 degrees the daily email will be
+  suspended."
+- **Why:** Through the cold months the Aare is too cold to swim, so the daily
+  report is just noise; suspending it until spring keeps inboxes quiet without
+  anyone having to turn the job off and back on.
 
 ### 2026-09-09 — Stop false "workflow failed" alerts on recovered days
 - **What:** Merged the send and re-dispatch into one workflow step. A blocked-IP

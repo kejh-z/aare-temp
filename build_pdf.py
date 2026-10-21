@@ -188,6 +188,13 @@ def build():
     S.append(Spacer(1, 4))
     S.append(Paragraph("The email is delivered as styled HTML: a blue temperature "
                        "card, a stats table, and a data-source footer.", body))
+    S.append(Spacer(1, 4))
+    S.append(Paragraph(
+        "<b>Winter suspension:</b> if the day's peak water temperature stays below "
+        "<b>14.5 &deg;C</b>, no email is sent that day (the run still succeeds &mdash; no "
+        "retry, no alert). Emails resume automatically once the peak rises back above "
+        "14.5 &deg;C in spring. The footer notes this so recipients know why the reports "
+        "pause; the threshold is the <font face='Courier'>SUSPEND_BELOW</font> constant.", body))
 
     # 2. Data source
     S.append(Paragraph("2. Data Source", h1)); S.append(hr())
