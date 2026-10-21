@@ -24,6 +24,10 @@ jobs:
           const API_URL = "https://aareguru.existenz.ch/v2018/current?app=aare-temp&version=1.0.0";
           const RECIPIENTS = ["kevin@holden.ch", "jessica@holden.ch", "brigitte.lendl@bluewin.ch"];
 
+          // Winter suspension: if the day peak stays below this, send no email.
+          // Emails resume automatically once the peak rises back above it.
+          const SUSPEND_BELOW = 14.5;
+
           const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
           // A few quick retries handle genuine transient blips. A blocked IP,
@@ -86,9 +90,14 @@ jobs:
             else swimVerdict = "Too cold for most swimmers.";
 
             const subject = "Aare: " + maxTemp.toFixed(1) + "°C peak today";
-            const html = "<div style=\"font-family:system-ui,sans-serif;max-width:480px;margin:0 auto\"><h2 style=\"color:#1a5276;margin-bottom:4px\">Aare Marzili — Daily Report</h2><p style=\"color:#666;margin-top:0\">" + today + "</p><div style=\"background:linear-gradient(135deg,#1a5276,#2e86c1);color:white;border-radius:12px;padding:24px;text-align:center;margin:16px 0\"><div style=\"font-size:48px;font-weight:bold\">" + maxTemp.toFixed(1) + "°C</div><div style=\"font-size:14px;opacity:0.9\">Peak temperature at " + maxTime + "</div></div><table style=\"width:100%;border-collapse:collapse;margin:16px 0\"><tr><td style=\"padding:8px 0;border-bottom:1px solid #eee\">Current temperature</td><td style=\"padding:8px 0;border-bottom:1px solid #eee;text-align:right;font-weight:bold\">" + currentTemp.toFixed(1) + "°C</td></tr><tr><td style=\"padding:8px 0;border-bottom:1px solid #eee\">Flow rate</td><td style=\"padding:8px 0;border-bottom:1px solid #eee;text-align:right;font-weight:bold\">" + flow + " m³/s</td></tr><tr><td style=\"padding:8px 0\">Measurements today</td><td style=\"padding:8px 0;text-align:right;font-weight:bold\">" + todayReadings.length + "</td></tr></table><p style=\"font-size:16px\">" + swimVerdict + "</p><p style=\"color:#999;font-size:12px;margin-top:24px\">Data from <a href=\"https://aaremarzili.ch\" style=\"color:#999\">aaremarzili.ch</a> via aare.guru API</p></div>";
+            const html = "<div style=\"font-family:system-ui,sans-serif;max-width:480px;margin:0 auto\"><h2 style=\"color:#1a5276;margin-bottom:4px\">Aare Marzili — Daily Report</h2><p style=\"color:#666;margin-top:0\">" + today + "</p><div style=\"background:linear-gradient(135deg,#1a5276,#2e86c1);color:white;border-radius:12px;padding:24px;text-align:center;margin:16px 0\"><div style=\"font-size:48px;font-weight:bold\">" + maxTemp.toFixed(1) + "°C</div><div style=\"font-size:14px;opacity:0.9\">Peak temperature at " + maxTime + "</div></div><table style=\"width:100%;border-collapse:collapse;margin:16px 0\"><tr><td style=\"padding:8px 0;border-bottom:1px solid #eee\">Current temperature</td><td style=\"padding:8px 0;border-bottom:1px solid #eee;text-align:right;font-weight:bold\">" + currentTemp.toFixed(1) + "°C</td></tr><tr><td style=\"padding:8px 0;border-bottom:1px solid #eee\">Flow rate</td><td style=\"padding:8px 0;border-bottom:1px solid #eee;text-align:right;font-weight:bold\">" + flow + " m³/s</td></tr><tr><td style=\"padding:8px 0\">Measurements today</td><td style=\"padding:8px 0;text-align:right;font-weight:bold\">" + todayReadings.length + "</td></tr></table><p style=\"font-size:16px\">" + swimVerdict + "</p><p style=\"color:#999;font-size:11px;font-style:italic;margin-top:20px\">During the Winter period when temperatures are below 14.5 degrees the daily email will be suspended.</p><p style=\"color:#999;font-size:12px;margin-top:8px\">Data from <a href=\"https://aaremarzili.ch\" style=\"color:#999\">aaremarzili.ch</a> via aare.guru API</p></div>";
 
             console.log("Max: " + maxTemp.toFixed(1) + "C at " + maxTime);
+
+            if (maxTemp < SUSPEND_BELOW) {
+              console.log("Peak " + maxTemp.toFixed(1) + "C is below the " + SUSPEND_BELOW + "C threshold - winter suspension, no email sent today.");
+              return;
+            }
 
             const emailRes = await fetch("https://api.resend.com/emails", {
               method: "POST",
@@ -105,7 +114,7 @@ jobs:
           '
           CODE=$?
           if [ "$CODE" -eq 0 ]; then
-            echo "Report delivered on attempt ${ATTEMPT:-1}."
+            echo "Run completed on attempt ${ATTEMPT:-1} (email sent, or suspended below the ${SUSPEND_BELOW:-14.5} degree threshold)."
             exit 0
           fi
 

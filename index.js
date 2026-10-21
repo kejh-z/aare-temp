@@ -6,6 +6,10 @@ const API_URL =
   "https://aareguru.existenz.ch/v2018/current?app=aare-temp&version=1.0.0";
 const RECIPIENTS = ["kevin@holden.ch", "jessica@holden.ch", "brigitte.lendl@bluewin.ch"];
 
+// Winter suspension: if the day's peak stays below this, send no email.
+// Emails resume automatically once the peak rises back above it.
+const SUSPEND_BELOW = 14.5;
+
 function loadEnv() {
   const envPath = path.join(__dirname, ".env");
   if (fs.existsSync(envPath)) {
@@ -131,7 +135,10 @@ function buildEmail(maxTemp, maxTime, currentTemp, flow, readings) {
 
       <p style="font-size: 16px;">${swimVerdict}</p>
 
-      <p style="color: #999; font-size: 12px; margin-top: 24px;">
+      <p style="color: #999; font-size: 11px; font-style: italic; margin-top: 20px;">
+        During the Winter period when temperatures are below 14.5 degrees the daily email will be suspended.
+      </p>
+      <p style="color: #999; font-size: 12px; margin-top: 8px;">
         Data from <a href="https://aaremarzili.ch" style="color: #999;">aaremarzili.ch</a> via aare.guru API
       </p>
     </div>
@@ -150,6 +157,11 @@ async function sendReport(dryRun) {
 
   console.log(`Today's max: ${max.toFixed(1)}°C at ${time} (${readings} readings)`);
   console.log(`Current: ${currentTemp.toFixed(1)}°C, Flow: ${flow} m³/s`);
+
+  if (max < SUSPEND_BELOW) {
+    console.log(`Peak ${max.toFixed(1)}°C is below the ${SUSPEND_BELOW}°C threshold — winter suspension, no email ${dryRun ? "would be" : ""} sent today.`);
+    return;
+  }
 
   const { subject, html } = buildEmail(max, time, currentTemp, flow, readings);
 
