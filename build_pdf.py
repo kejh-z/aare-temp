@@ -265,9 +265,18 @@ def build():
         "On failure, a second step (<font face='Courier'>if: failure()</font>) waits "
         "90 s and uses the <font face='Courier'>GH_PAT</font> secret to dispatch a "
         "brand-new run with an incremented <font face='Courier'>attempt</font> counter.",
-        "This repeats until a run succeeds or the cap of <b>6 attempts</b> is reached. "
-        "The chain stops the instant one run succeeds, so recipients never get a duplicate.",
+        "This repeats until a run succeeds or the attempt cap is reached. The chain "
+        "stops the instant one run succeeds, so recipients never get a duplicate.",
     ]))
+    S.append(Spacer(1, 4))
+    S.append(Paragraph(
+        "<b>Retry schedule (two bursts, BURST=6, MAX=12):</b> up to 6 fresh-IP attempts "
+        "~90 s apart (~10 min) clear a blocked IP fast. If the whole burst fails, the API "
+        "is likely down (a network-level <font face='Courier'>fetch failed</font>, not the "
+        "Imunify360 page) and fresh IPs won't help a dead host - so the workflow waits "
+        "~1 hour and runs a second burst of 6, then gives up with a real failure. Added "
+        "2026-10-22 after a full API outage on 2026-10-21 outlasted the original single "
+        "~10-minute window.", body))
     S.append(Paragraph(
         "With ~60% success per IP, six independent attempts give roughly <b>99.6%</b> "
         "reliability, and on a bad-IP day the email still typically arrives within a "

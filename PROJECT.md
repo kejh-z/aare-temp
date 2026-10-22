@@ -133,15 +133,28 @@ a run (or sleeping and retrying) cannot escape a block. The fix is to retry as
 2. On failure, a second workflow step (`if: failure()`) waits 90 s and uses the
    `GH_PAT` secret to **dispatch a brand-new run** with an incremented
    `attempt` counter (passed as a `workflow_dispatch` input).
-3. This repeats until a run succeeds or the cap of **6 attempts** is reached.
-   The chain stops the instant one run succeeds, so recipients never get a
-   duplicate email.
+3. This repeats until a run succeeds or the attempt cap is reached. The chain
+   stops the instant one run succeeds, so recipients never get a duplicate email.
 
-With ~60% success per IP, six independent attempts give roughly **99.6%**
-reliability, and on a bad-IP day the email still typically arrives within a few
-minutes. A note on cost: GitHub's built-in token deliberately cannot trigger a
-`workflow_dispatch` (to prevent recursion), which is why a separate `GH_PAT`
-personal-access-token secret is required for the re-dispatch.
+**Retry schedule (two bursts).** The attempts are grouped into two *bursts* of 6
+(`BURST=6`, `MAX=12`):
+
+- **Burst 1** — up to 6 fresh-IP attempts ~90 s apart (~10 minutes total). This
+  clears a blocked IP or a brief blip quickly, usually within a couple of minutes.
+- If the whole first burst fails, the data provider is probably **down** (a
+  network-level `fetch failed` rather than the Imunify360 page), and fresh IPs
+  won't help a dead host — so the workflow **waits ~1 hour** and runs
+  **Burst 2** (another 6 attempts). This rides out a longer upstream outage.
+- If Burst 2 also fails, the workflow **gives up** and reports a real failure
+  (exit 1 → red run → alert). This was added on 2026-10-22 after a full API
+  outage on 2026-10-21 outlasted the original single ~10-minute window.
+
+With ~60% success per IP, six independent attempts in a burst give roughly
+**99.6%** reliability against blocked IPs, and the second burst adds a one-hour
+grace period for upstream outages. A note on cost: GitHub's built-in token
+deliberately cannot trigger a `workflow_dispatch` (to prevent recursion), which
+is why a separate `GH_PAT` personal-access-token secret is required for the
+re-dispatch.
 
 A browser **User-Agent** header is also sent on the data request (default
 library user-agents are an easy target for bot-protection), though the dominant
@@ -291,6 +304,16 @@ The two GitHub repository secrets:
 
 Newest first. Each entry records **what** changed and **why**. Please add a new
 entry here whenever the app or its setup changes.
+
+### 2026-10-22 — Second retry burst an hour later for API outages
+- **What:** Grouped the retries into two bursts (`BURST=6`, `MAX=12`): one fast
+  burst of up to 6 fresh-IP attempts (~90 s apart, ~10 min), then — if the whole
+  burst fails — a ~1-hour wait and a second burst of 6, then give up.
+- **Why:** On 2026-10-21 the data API (`existenz.ch`) was unreachable for the
+  entire ~10-minute retry window (every attempt got a network-level
+  `fetch failed`), so the email was missed. Fresh-IP rotation can't help when the
+  host itself is down; a second burst an hour later gives a longer outage time to
+  recover before giving up.
 
 ### 2026-10-21 — Winter suspension below 14.5 °C
 - **What:** Added a `SUSPEND_BELOW = 14.5` threshold. If the day's peak water
