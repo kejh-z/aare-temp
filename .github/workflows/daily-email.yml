@@ -125,20 +125,33 @@ jobs:
           # spurious "workflow failed" alert. Only a genuine dead-end - all
           # attempts used up, a missing token, or the dispatch itself failing -
           # exits non-zero and surfaces as a real failure worth alerting on.
-          MAX=6
+          # Retry schedule: one fast BURST of fresh-IP attempts (~90s apart, ~10
+          # min total) handles blocked IPs and brief blips. If a whole burst
+          # fails, the API is probably down, so wait ~1 hour and run a second
+          # burst, then give up. MAX = BURST * number-of-bursts.
+          BURST=6
+          MAX=12
           CUR=${ATTEMPT:-1}
           if [ -z "$GH_PAT" ]; then
             echo "Send failed and no GH_PAT secret is set - cannot launch a retry."
             exit 1
           fi
           if [ "$CUR" -ge "$MAX" ]; then
-            echo "Send failed and reached the max ($MAX) attempts for today. Giving up (real failure)."
+            echo "Send failed after both bursts ($MAX attempts total). Giving up (real failure)."
             exit 1
           fi
           NEXT=$((CUR + 1))
-          echo "Attempt $CUR failed (most likely a blocked datacenter IP)."
-          echo "Waiting 90s, then dispatching a fresh run (#$NEXT) on a new runner/IP..."
-          sleep 90
+          if [ $((CUR % BURST)) -eq 0 ]; then
+            # End of a burst: the whole burst failed (likely an API outage).
+            WAIT=3600
+            echo "A full burst of $BURST attempts failed - the API looks down."
+            echo "Waiting ~1 hour before the next burst (dispatching run #$NEXT)..."
+          else
+            WAIT=90
+            echo "Attempt $CUR failed (most likely a blocked datacenter IP or a brief blip)."
+            echo "Waiting 90s, then dispatching a fresh run (#$NEXT) on a new runner/IP..."
+          fi
+          sleep "$WAIT"
           # Force HTTP/1.1 (avoids the intermittent "curl (92) HTTP/2 stream ...
           # CANCEL" that once broke the chain) and let curl retry transient
           # network/5xx errors itself, so a single glitch cannot stop the retries.
@@ -149,7 +162,7 @@ jobs:
                -H "Accept: application/vnd.github+json" \
                https://api.github.com/repos/kejh-z/aare-temp/actions/workflows/daily-email.yml/dispatches \
                -d "{\"ref\":\"main\",\"inputs\":{\"attempt\":\"$NEXT\"}}"; then
-            echo "Fresh run #$NEXT dispatched - this blocked-IP attempt was handled by the"
+            echo "Fresh run #$NEXT dispatched - this failed attempt was handled by the"
             echo "retry chain, so this run is reported as success (no failure alert)."
             exit 0
           else
